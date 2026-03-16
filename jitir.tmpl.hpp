@@ -2416,6 +2416,10 @@ namespace metajit {
         return (mask & (uint64_t(1) << bit)) != 0;
       }
 
+      bool operator==(Bits other) {
+        return type == other.type && mask == other.mask && value == other.value;
+      }
+
       std::optional<bool> at(size_t bit) const {
         if (mask & (uint64_t(1) << bit)) {
           return (value & (uint64_t(1) << bit)) != 0;
@@ -3199,14 +3203,15 @@ class SimplifyTrace: public metajit::Pass<SimplifyTrace> {
 private:
   metajit::Section* _section = nullptr;
   metajit::Builder _builder;
+  NameMap<Bits> _values;
+  NameMap<Value*> _substs;
 
 public:
 
   SimplifyTrace(metajit::Section* section, metajit::Chain& chain):
-                 Pass(section), _section(section), _builder(section) {
+                 Pass(section), _section(section), _builder(section),
+                 _values(section), _substs(section) {
     section->autoname();
-    NameMap<Bits> _values(section);
-    NameMap<Value*> substs(section);
     Block* block = chain.front();
     for (Arg* arg : block->args()) {
       _values[arg] = Bits(arg->type(), 0, 0);
@@ -3216,7 +3221,7 @@ public:
       for (Inst* inst : *block) {
         Bits value = Bits::eval(inst, _values);
         _values[inst] = value;
-        inst->substitute_args(substs);
+        inst->substitute_args(_substs);
       }
       Inst* last_inst = block->terminator();
       if (dynmatch(BranchInst, branch, last_inst)) {
@@ -3225,11 +3230,9 @@ public:
           if (block_index + 1 < chain.size()) {
           Block* next_block = chain.at(block_index + 1);
           if (next_block == branch->true_block()) {
-            _values[cond] = Bits::constant(true);
-            substs[cond] = _builder.build_const(Type::Bool, 1);
+            propagate_backwards(cond, Bits::constant(true));
           } else {
-            _values[cond] = Bits::constant(false);
-            substs[cond] = _builder.build_const(Type::Bool, 0);
+            propagate_backwards(cond, Bits::constant(false));
           }
           propagate_backwards(cond, _values[cond]);
           }
@@ -3237,7 +3240,35 @@ public:
       }
     }
   }
-  void propagate_backwards(Value* value, const Bits& bits) {
+  bool propagate_backwards(Value* value, const Bits& bits) {
+    if (dynmatch(Const, constant, value)) {
+      if (bits.is_const()) {
+        assert (constant->value() == bits.value);
+      }
+      return false;
+    }
+    Bits old_bits = Bits::at(_values, value);
+    if (old_bits == bits) {
+      return false;
+    }
+    if (dynmatch(NamedValue, val, value)) {
+      _values[val] = bits;
+      if (bits.is_const()) {
+        _substs[val] = _builder.build_const(val->type(), bits.value);
+      }
+    }
+    if (dynmatch(EqInst, eq, value)) {
+      if (bits.is_const() && bits.value == 1) {
+        if (dynmatch(Const, const_b, eq->arg(1))) {
+          return propagate_backwards(eq->arg(0), Bits::constant(const_b->type(), const_b->value()));
+        }
+      }
+    } else if (dynmatch(Inst, inst, value)) {
+      std::cout << "unknown inst on backprop: ";
+      inst->write(std::cout);
+      std::cout << std::endl;
+    }
+    return false;
   }
 };
 

@@ -44,7 +44,6 @@ int main() {
   metajit::LLVMCodeGen::initilize_llvm_jit();
 
   DiffTest("select_and_knownbits", output_path).run([](Builder& builder, TestData& data) {
-
     Value* cond = data.input(Type::Bool);
     Value* value = data.input(Type::Int64);
 
@@ -90,6 +89,36 @@ b0(%0: Ptr):
 b1:
   %4 = Select 1, %2, 0
   Store %0, %4, aliasing=0, offset=16
+b2:
+  Exit
+}
+)", builder.section(), chain);
+  });
+
+  DiffTest("const_prop_eq_backwards", output_path).run([](Builder& builder, TestData& data) {
+    Value* value = data.input(Type::Int8);
+    Value* eq = builder.build_eq(value, builder.build_const(Type::Int8, 42));
+    Block* true_block = builder.build_block();
+    Block* false_block = builder.build_block();
+    Chain* chain = new Chain();
+    chain->add(builder.block());
+    chain->add(true_block);
+    builder.build_branch(eq, true_block, false_block);
+
+    builder.move_to_begin(false_block);
+    builder.build_exit();
+
+    builder.move_to_begin(true_block);
+    Value* select = builder.build_add(value, builder.build_const(Type::Int8, 17));
+    data.output(select);
+    check_trace_simplify(R"(section {
+b0(%0: Ptr):
+  %1 = Load %0, type=Int8, flags={}, aliasing=0, offset=0
+  %2 = Eq %1, 42
+  Branch %2, true_block=b1, false_block=b2
+b1:
+  %4 = Add 42, 17
+  Store %0, %4, aliasing=0, offset=1
 b2:
   Exit
 }
