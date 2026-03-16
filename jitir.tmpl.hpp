@@ -3194,6 +3194,53 @@ namespace metajit {
     }
   };
 
+class SimplifyTrace: public metajit::Pass<SimplifyTrace> {
+ using Bits = metajit::KnownBits::Bits;
+private:
+  metajit::Section* _section = nullptr;
+  metajit::Builder _builder;
+
+public:
+
+  SimplifyTrace(metajit::Section* section, metajit::Chain& chain):
+                 Pass(section), _section(section), _builder(section) {
+    section->autoname();
+    NameMap<Bits> _values(section);
+    NameMap<Value*> substs(section);
+    Block* block = chain.front();
+    for (Arg* arg : block->args()) {
+      _values[arg] = Bits(arg->type(), 0, 0);
+    }
+    for (size_t block_index = 0; block_index < chain.size(); block_index++) {
+       Block* block = chain.at(block_index);
+      for (Inst* inst : *block) {
+        Bits value = Bits::eval(inst, _values);
+        _values[inst] = value;
+        inst->substitute_args(substs);
+      }
+      Inst* last_inst = block->terminator();
+      if (dynmatch(BranchInst, branch, last_inst)) {
+        // in the next block we know the value of the bool
+        if (dynmatch(NamedValue, cond, branch->cond())) {
+          if (block_index + 1 < chain.size()) {
+          Block* next_block = chain.at(block_index + 1);
+          if (next_block == branch->true_block()) {
+            _values[cond] = Bits::constant(true);
+            substs[cond] = _builder.build_const(Type::Bool, 1);
+          } else {
+            _values[cond] = Bits::constant(false);
+            substs[cond] = _builder.build_const(Type::Bool, 0);
+          }
+          propagate_backwards(cond, _values[cond]);
+          }
+        }
+      }
+    }
+  }
+  void propagate_backwards(Value* value, const Bits& bits) {
+  }
+};
+
   class CommonSubexprElim: public Pass<CommonSubexprElim> {
   private:
     struct Lookup {

@@ -31,7 +31,7 @@ tests/test_cfg: tests/test_cfg.cpp ${HEADER_FILES} ${TEST_HEADER_FILES}
 	clang++ ${CFLAGS} -o $@ $<
 
 tests/test_opt: tests/test_opt.cpp ${HEADER_FILES} ${TEST_HEADER_FILES}
-	clang++ ${CFLAGS} -o $@ $<
+	clang++ ${CFLAGS} -g -o $@ $<
 
 tests/fuzzer: tests/fuzzer.cpp ${HEADER_FILES} ${TEST_HEADER_FILES}
 	clang++ -g ${CFLAGS} -o $@ $<

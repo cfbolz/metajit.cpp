@@ -29,6 +29,17 @@ void check_simplify(const std::string& expected, Section* section) {
   unittest_assert(ss.str() == expected);
 }
 
+void check_trace_simplify(const std::string& expected, Section* section, Chain* chain) {
+  metajit::SimplifyTrace::run(section, *chain);
+  std::stringstream ss;
+  section->write(ss);
+  if (ss.str() != expected) {
+    std::cerr << "Expected:\n" << expected << "\n\nGot:\n" << ss.str() << std::endl;
+  }
+  unittest_assert(ss.str() == expected);
+}
+
+
 int main() {
   metajit::LLVMCodeGen::initilize_llvm_jit();
 
@@ -53,6 +64,36 @@ b0(%0: Ptr):
   Store %0, %2, aliasing=0, offset=16
 }
 )", builder.section());
+  });
+
+  DiffTest("const_prop_branch", output_path).run([](Builder& builder, TestData& data) {
+    Value* cond = data.input(Type::Bool);
+    Value* value = data.input(Type::Int64);
+    Block* true_block = builder.build_block();
+    Block* false_block = builder.build_block();
+    Chain* chain = new Chain();
+    chain->add(builder.block());
+    chain->add(true_block);
+    builder.build_branch(cond, true_block, false_block);
+
+    builder.move_to_begin(false_block);
+    builder.build_exit();
+
+    builder.move_to_begin(true_block);
+    Value* select = builder.build_select(cond, value, builder.build_const(Type::Int64, 0));
+    data.output(select);
+    check_trace_simplify(R"(section {
+b0(%0: Ptr):
+  %1 = Load %0, type=Bool, flags={}, aliasing=0, offset=0
+  %2 = Load %0, type=Int64, flags={}, aliasing=0, offset=8
+  Branch %1, true_block=b1, false_block=b2
+b1:
+  %4 = Select 1, %2, 0
+  Store %0, %4, aliasing=0, offset=16
+b2:
+  Exit
+}
+)", builder.section(), chain);
   });
   return 0;
 }
