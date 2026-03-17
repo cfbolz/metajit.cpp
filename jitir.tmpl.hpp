@@ -15,6 +15,7 @@
 // limitations under the License.
 
 #include <sstream>
+#include <iostream>
 #include <vector>
 #include <cassert>
 #include <cinttypes>
@@ -3222,21 +3223,30 @@ public:
   SimplifyTrace(metajit::Section* section, metajit::Chain* chain):
                  Pass(section), _section(section), _builder(section),
                  _values(section), _substs(section) {
-    section->autoname();
-    Block* block = chain->front();
-    for (Arg* arg : block->args()) {
-      _values[arg] = Bits(arg->type(), 0, 0);
+    if (chain->size() == 1) {
+      return;
     }
-    for (size_t block_index = 0; block_index < chain->size(); block_index++) {
-       Block* block = chain->at(block_index);
+    section->autoname();
+
+    _init_values();
+    Block* block = chain->front();
+    while (true) {
       for (Inst* inst : *block) {
+        inst->substitute_args(_substs);
+        if (inst->has_side_effect() ||
+            inst->is_terminator() ||
+            inst->type() == Type::Void ||
+            inst->type() == Type::Ptr) {
+          continue;
+        }
         Bits bits = Bits::eval(inst, _values);
         _values[inst] = bits;
-        inst->substitute_args(_substs);
-        if (!inst->has_side_effect() &&
-            !inst->is_terminator() &&
-            inst->type() != Type::Void &&
-            bits.is_const()) {
+        if (bits.is_const()) {
+          std::cout << "adding to substs: ";
+          inst->write(std::cout);
+          std::cout << " const ";
+          bits.write(std::cout);
+          std::cout << std::endl;
           _substs[inst] = _builder.build_const(inst->type(), bits.value);
         }
       }
@@ -3244,18 +3254,42 @@ public:
       if (dynmatch(BranchInst, branch, last_inst)) {
         // in the next block we know the value of the bool
         if (dynmatch(NamedValue, cond, branch->cond())) {
-          if (block_index + 1 < chain->size()) {
-            Block* next_block = chain->at(block_index + 1);
-            if (next_block == branch->true_block()) {
-              propagate_backwards(cond, Bits::constant(true));
-            } else {
-              propagate_backwards(cond, Bits::constant(false));
-            }
+          Block* true_block = branch->true_block();
+          Block* false_block = branch->false_block();
+          if (is_exit_block(true_block)) {
+            block = false_block;
+            propagate_backwards(cond, Bits::constant(false));
+            continue;
+          } else if (is_exit_block(false_block)) {
+            block = true_block;
+            propagate_backwards(cond, Bits::constant(true));
+            continue;
           }
         }
       }
+      return;
     }
   }
+
+  void _init_values() {
+    for (Block* block : *_section) {
+      for (Arg* arg : block->args()) {
+        _values[arg] = Bits(arg->type(), 0, 0);
+      }
+      for (Inst* inst : *block) {
+        _values[inst] = Bits(inst->type(), 0, 0);
+      }
+    }
+  }
+
+  bool static is_exit_block(Block* block) {
+    Inst* terminator = block->terminator();
+    if (dynmatch(ExitInst, exit, terminator)) {
+      return true;
+    }
+    return false;
+  }
+
   bool propagate_backwards(Value* value, const Bits& newinfo) {
 
     Bits old_bits = Bits::at(_values, value);
