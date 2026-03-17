@@ -3256,15 +3256,20 @@ public:
       }
     }
   }
-  bool propagate_backwards(Value* value, const Bits& bits) {
+  bool propagate_backwards(Value* value, const Bits& newinfo) {
 
-    if (dynmatch(Const, constant, value)) {
-      if (bits.is_const()) {
-        assert (constant->value() == bits.value);
-      }
+    Bits old_bits = Bits::at(_values, value);
+    auto maybe_bits = old_bits.intersect(newinfo);
+    if (!maybe_bits.has_value()) {
+      // trace guards contradict each other, can happen when fuzzing
       return false;
     }
-    Bits old_bits = Bits::at(_values, value);
+    Bits bits = maybe_bits.value();
+    
+    if (dynmatch(Const, constant, value)) {
+      assert (bits.matches_const(constant->value()));
+      return false;
+    }
     if (old_bits == bits) {
       return false;
     }
