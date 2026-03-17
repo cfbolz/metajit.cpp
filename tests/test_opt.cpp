@@ -30,7 +30,7 @@ void check_simplify(const std::string& expected, Section* section) {
 }
 
 void check_trace_simplify(const std::string& expected, Section* section, Chain* chain) {
-  metajit::SimplifyTrace::run(section, *chain);
+  metajit::SimplifyTrace::run(section, chain);
   std::stringstream ss;
   section->write(ss);
   if (ss.str() != expected) {
@@ -93,6 +93,7 @@ b2:
   Exit
 }
 )", builder.section(), chain);
+    delete chain;
   });
 
   DiffTest("const_prop_eq_backwards", output_path).run([](Builder& builder, TestData& data) {
@@ -109,8 +110,8 @@ b2:
     builder.build_exit();
 
     builder.move_to_begin(true_block);
-    Value* select = builder.build_add(value, builder.build_const(Type::Int8, 17));
-    data.output(select);
+    Value* add = builder.build_add(value, builder.build_const(Type::Int8, 17));
+    data.output(add);
     check_trace_simplify(R"(section {
 b0(%0: Ptr):
   %1 = Load %0, type=Int8, flags={}, aliasing=0, offset=0
@@ -118,11 +119,44 @@ b0(%0: Ptr):
   Branch %2, true_block=b1, false_block=b2
 b1:
   %4 = Add 42, 17
-  Store %0, %4, aliasing=0, offset=1
+  Store %0, 59, aliasing=0, offset=1
 b2:
   Exit
 }
 )", builder.section(), chain);
+    delete chain;
   });
+
+  DiffTest("const_prop_resize_x_backwards", output_path).run([](Builder& builder, TestData& data) {
+    Value* value = data.input(Type::Int8);
+    Value* cond = builder.build_resize_x(value, Type::Bool);
+    Block* true_block = builder.build_block();
+    Block* false_block = builder.build_block();
+    Chain* chain = new Chain();
+    chain->add(builder.block());
+    chain->add(true_block);
+    builder.build_branch(cond, true_block, false_block);
+
+    builder.move_to_begin(false_block);
+    builder.build_exit();
+
+    builder.move_to_begin(true_block);
+    Value* andinst = builder.build_and(value, builder.build_const(Type::Int8, 1));
+    data.output(andinst);
+    check_trace_simplify(R"(section {
+b0(%0: Ptr):
+  %1 = Load %0, type=Int8, flags={}, aliasing=0, offset=0
+  %2 = ResizeX %1, type=Bool
+  Branch %2, true_block=b1, false_block=b2
+b1:
+  %4 = And %1, 1
+  Store %0, 1, aliasing=0, offset=1
+b2:
+  Exit
+}
+)", builder.section(), chain);
+    delete chain;
+  });
+
   return 0;
 }

@@ -3208,39 +3208,45 @@ private:
 
 public:
 
-  SimplifyTrace(metajit::Section* section, metajit::Chain& chain):
+  SimplifyTrace(metajit::Section* section, metajit::Chain* chain):
                  Pass(section), _section(section), _builder(section),
                  _values(section), _substs(section) {
     section->autoname();
-    Block* block = chain.front();
+    Block* block = chain->front();
     for (Arg* arg : block->args()) {
       _values[arg] = Bits(arg->type(), 0, 0);
     }
-    for (size_t block_index = 0; block_index < chain.size(); block_index++) {
-       Block* block = chain.at(block_index);
+    for (size_t block_index = 0; block_index < chain->size(); block_index++) {
+       Block* block = chain->at(block_index);
       for (Inst* inst : *block) {
-        Bits value = Bits::eval(inst, _values);
-        _values[inst] = value;
+        Bits bits = Bits::eval(inst, _values);
+        _values[inst] = bits;
         inst->substitute_args(_substs);
+        if (!inst->has_side_effect() &&
+            !inst->is_terminator() &&
+            inst->type() != Type::Void &&
+            bits.is_const()) {
+          _substs[inst] = _builder.build_const(inst->type(), bits.value);
+        }
       }
       Inst* last_inst = block->terminator();
       if (dynmatch(BranchInst, branch, last_inst)) {
         // in the next block we know the value of the bool
         if (dynmatch(NamedValue, cond, branch->cond())) {
-          if (block_index + 1 < chain.size()) {
-          Block* next_block = chain.at(block_index + 1);
-          if (next_block == branch->true_block()) {
-            propagate_backwards(cond, Bits::constant(true));
-          } else {
-            propagate_backwards(cond, Bits::constant(false));
-          }
-          propagate_backwards(cond, _values[cond]);
+          if (block_index + 1 < chain->size()) {
+            Block* next_block = chain->at(block_index + 1);
+            if (next_block == branch->true_block()) {
+              propagate_backwards(cond, Bits::constant(true));
+            } else {
+              propagate_backwards(cond, Bits::constant(false));
+            }
           }
         }
       }
     }
   }
   bool propagate_backwards(Value* value, const Bits& bits) {
+
     if (dynmatch(Const, constant, value)) {
       if (bits.is_const()) {
         assert (constant->value() == bits.value);
@@ -3263,9 +3269,13 @@ public:
           return propagate_backwards(eq->arg(0), Bits::constant(const_b->type(), const_b->value()));
         }
       }
+    } else if (dynmatch(ResizeXInst, resize, value)) {
+      Value* arg = resize->arg(0);
+      return propagate_backwards(arg, bits.resize_x(arg->type()));
     } else if (dynmatch(Inst, inst, value)) {
       std::cout << "unknown inst on backprop: ";
       inst->write(std::cout);
+      std::cout << " "; bits.write(std::cout);
       std::cout << std::endl;
     }
     return false;
