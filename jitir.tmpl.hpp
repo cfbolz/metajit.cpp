@@ -2689,6 +2689,17 @@ namespace metajit {
         }
       }
 
+      std::optional<Bits> intersect(const Bits& other) {
+        std::optional<Bits> res;
+        uint64_t resvalue = value | other.value;
+        uint64_t either_known = mask | other.mask;
+        uint64_t both_known = mask & other.mask;
+        if ((value & both_known) == (other.value & both_known)) {
+          res = Bits(type, either_known, resvalue);
+        }
+        return res;
+      }
+
       static Bits eval(Inst* inst, NameMap<Bits>& values) {
         if (dynamic_cast<FreezeInst*>(inst) ||
             dynamic_cast<AssumeConstInst*>(inst)) {

@@ -158,6 +158,46 @@ void test_sub_example() {
   });
 }
 
+
+void test_intersect_example() {
+  unittest::Test("intersect_example").run([]() {
+    Bits a = Bits(Type::Int64, 0b10001111, 0b10001010); // 1???1010
+    Bits b = Bits(Type::Int64, 0b11100011, 0b11000010); // 110???10
+    auto c = a.intersect(b); // 110?1010;
+    unittest_assert (c.has_value());
+    unittest_assert (c.value().mask == 0b11101111);
+    unittest_assert (c.value().value == 0b11001010);
+
+    a = Bits(Type::Int64, 0b1, 0b0);
+    b = Bits(Type::Int64, 0b1, 0b1);
+    c = a.intersect(b);
+    unittest_assert (not c.has_value());
+  });
+}
+
+void test_random_intersect() {
+  unittest::Test("random_intersect").run([]() {
+    for (int i = 0; i < num_examples; i++) {
+      auto [value_a, bits_a] = random_value_and_bits(Type::Int8);
+      auto [value_b, bits_b] = random_value_and_bits(Type::Int8);
+      auto c = bits_a.intersect(bits_b);
+      if (c.has_value()) {
+        Bits bits_c = c.value();
+        for (uint64_t j = 0; j < 256; j++) {
+          if (bits_c.matches_const(j)) {
+            unittest_assert (bits_a.matches_const(j));
+            unittest_assert (bits_b.matches_const(j));
+          }
+        }
+      } else {
+        unittest_assert (!bits_a.matches_const(value_b));
+        unittest_assert (!bits_b.matches_const(value_a));
+      }
+    }
+  });
+}
+
+
 int main() {
   test_add_example();
   test_sub_example();
@@ -166,6 +206,7 @@ int main() {
   test_random_sub();
   test_random_shifts();
   test_random_resize();
-
+  test_intersect_example();
+  test_random_intersect();
   return 0;
 }
