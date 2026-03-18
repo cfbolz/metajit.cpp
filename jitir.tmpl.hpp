@@ -3360,6 +3360,14 @@ public:
       propagate_backwards(add->arg(0), arg0);
       Bits arg1 = bits - Bits::at(_values, add->arg(0));
       propagate_backwards(add->arg(1), arg1);
+    } else if (dynmatch(ShlInst, shl, value)) {
+      Bits arg1 = Bits::at(_values, shl->arg(1));
+      if (arg1.is_const()) {
+        auto arg0 = bits.shl_backwards(arg1.value);
+        if (arg0.has_value()) {
+          propagate_backwards(shl->arg(0), arg0.value());
+        }
+      }
     } else if (dynmatch(SelectInst, select, value)) {
       Bits arg1 = Bits::at(_values, select->arg(1));
       Bits equal1 = arg1.eq(bits);
