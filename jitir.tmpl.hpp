@@ -3382,6 +3382,11 @@ public:
           propagate_backwards(select->arg(0), Bits::constant(Type::Bool, 1));
         }
       }
+    } else if (dynmatch(ResizeUInst, resize, value)) {
+      Value* arg = resize->arg(0);
+      // we also need to use resize_x here,
+      // we don't know which bits got removed on narrowing
+      return propagate_backwards(arg, bits.resize_x(arg->type()));
     } else if (dynmatch(ResizeXInst, resize, value)) {
       Value* arg = resize->arg(0);
       return propagate_backwards(arg, bits.resize_x(arg->type()));
