@@ -2659,6 +2659,23 @@ namespace metajit {
         );
       }
 
+      std::optional<Bits> and_backwards(const Bits& argument) const {
+        // if this is the result an and-operation,
+        // and other is one of the arguments,
+        // what do we know about the other argument?
+        std::optional<Bits> res;
+        // if we have a place where result is 1 but argument is 0, then we are
+        // inconsistent
+        if (value & argument.mask & ~argument.value) {
+          return res;
+        }
+        // in all the places where the result is 1 both arguments have to 1. in
+        // the places where the result is 0, other has to be 0 iff argument is known 1.
+        uint64_t other_mask = (argument.value & mask) | value;
+        res = Bits(type, other_mask, value);
+        return res;
+      }
+
       void write(std::ostream& stream) const {
         size_t bits = type == Type::Bool ? 1 : type_size(type) * 8;
         for (size_t it = bits; it-- > 0; ) {
