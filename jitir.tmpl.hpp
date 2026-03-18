@@ -3345,6 +3345,20 @@ public:
       if (arg1.has_value()) {
         propagate_backwards(andinst->arg(1), arg1.value());
       }
+    } else if (dynmatch(SelectInst, select, value)) {
+      Bits arg1 = Bits::at(_values, select->arg(1));
+      Bits equal1 = arg1.eq(bits);
+      if (equal1.is_const() && !equal1.value) {
+        propagate_backwards(select->arg(2), bits);
+        propagate_backwards(select->arg(0), Bits::constant(Type::Bool, 0));
+      } else {
+        Bits arg2 = Bits::at(_values, select->arg(2));
+        Bits equal2 = arg2.eq(bits);
+        if (equal2.is_const() && !equal2.value) {
+          propagate_backwards(select->arg(1), bits);
+          propagate_backwards(select->arg(0), Bits::constant(Type::Bool, 1));
+        }
+      }
     } else if (dynmatch(ResizeXInst, resize, value)) {
       Value* arg = resize->arg(0);
       return propagate_backwards(arg, bits.resize_x(arg->type()));

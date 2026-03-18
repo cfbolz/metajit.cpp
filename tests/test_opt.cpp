@@ -223,5 +223,36 @@ b2:
     delete chain;
   });
 
+  DiffTest("backwards_select", output_path).run([](Builder& builder, TestData& data) {
+    Value* boolval = data.input(Type::Bool);
+    Value* value = builder.build_select(boolval, builder.build_const(Type::Int8, 4), builder.build_const(Type::Int8, 7));
+    Value* cond = builder.build_eq(value, builder.build_const(Type::Int8, 4));
+    Block* true_block = builder.build_block();
+    Block* false_block = builder.build_block();
+    Chain* chain = new Chain();
+    chain->add(builder.block());
+    chain->add(true_block);
+    builder.build_branch(cond, true_block, false_block);
+
+    builder.move_to_begin(false_block);
+    builder.build_exit();
+
+    builder.move_to_begin(true_block);
+    data.output(boolval);
+    check_trace_simplify(R"(section {
+b0(%0: Ptr):
+  %1 = Load %0, type=Bool, flags={}, aliasing=0, offset=0
+  %2 = Select %1, 4, 7
+  %3 = Eq %2, 4
+  Branch %3, true_block=b1, false_block=b2
+b1:
+  Store %0, 1, aliasing=0, offset=1
+b2:
+  Exit
+}
+)", builder.section(), chain);
+    delete chain;
+  });
+
   return 0;
 }
