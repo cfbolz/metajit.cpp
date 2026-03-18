@@ -3345,6 +3345,11 @@ public:
       if (arg1.has_value()) {
         propagate_backwards(andinst->arg(1), arg1.value());
       }
+    } else if (dynmatch(AddInst, add, value)) {
+      Bits arg0 = bits - Bits::at(_values, add->arg(1));
+      propagate_backwards(add->arg(0), arg0);
+      Bits arg1 = bits - Bits::at(_values, add->arg(0));
+      propagate_backwards(add->arg(1), arg1);
     } else if (dynmatch(SelectInst, select, value)) {
       Bits arg1 = Bits::at(_values, select->arg(1));
       Bits equal1 = arg1.eq(bits);

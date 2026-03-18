@@ -254,5 +254,36 @@ b2:
     delete chain;
   });
 
+  DiffTest("backwards_add", output_path).run([](Builder& builder, TestData& data) {
+    Value* val = data.input(Type::Int8);
+    Value* add = builder.build_add(val, builder.build_const(Type::Int8, 1));
+    Value* cond = builder.build_eq(add, builder.build_const(Type::Int8, 4));
+    Block* true_block = builder.build_block();
+    Block* false_block = builder.build_block();
+    Chain* chain = new Chain();
+    chain->add(builder.block());
+    chain->add(true_block);
+    builder.build_branch(cond, true_block, false_block);
+
+    builder.move_to_begin(false_block);
+    builder.build_exit();
+
+    builder.move_to_begin(true_block);
+    data.output(val);
+    check_trace_simplify(R"(section {
+b0(%0: Ptr):
+  %1 = Load %0, type=Int8, flags={}, aliasing=0, offset=0
+  %2 = Add %1, 1
+  %3 = Eq %2, 4
+  Branch %3, true_block=b1, false_block=b2
+b1:
+  Store %0, 3, aliasing=0, offset=1
+b2:
+  Exit
+}
+)", builder.section(), chain);
+    delete chain;
+  });
+
   return 0;
 }
