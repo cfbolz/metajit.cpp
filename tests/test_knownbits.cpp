@@ -227,6 +227,35 @@ void test_and_backwards_random() {
   });
 }
 
+void test_lshift_backwards_example() {
+  unittest::Test("lshift_backwards_example").run([]() {
+    Bits result = Bits(Type::Int8, 0b11010111, 0b10000000); // 10?0?000
+    auto a = result.shl_backwards(3); // ???10?0?
+    unittest_assert (a.has_value());
+    unittest_assert (a.value().mask == 0b11010);
+    unittest_assert (a.value().value == 0b10000);
+
+    result = Bits(Type::Int8, 0b11010111, 0b10000111); // 10?0?111
+    a = result.shl_backwards(3);
+    unittest_assert (!a.has_value());
+  });
+}
+
+
+void test_lshift_backwards_random() {
+  unittest::Test("lshift_backwards_random").run([]() {
+    for (int i = 0; i < num_examples; i++) {
+      auto [value_a, bits_a] = random_value_and_bits(Type::Int64);
+      uint64_t shift = (rand() % 64);
+      Bits result = bits_a.shl(shift);
+      auto better_a = result.shl_backwards(shift);
+      unittest_assert (better_a.has_value());
+      unittest_assert (better_a.value().matches_const(value_a));
+      unittest_assert (better_a.value().intersect(bits_a).has_value());
+    }
+  });
+}
+
 
 int main() {
   test_add_example();
@@ -240,5 +269,7 @@ int main() {
   test_random_intersect();
   test_and_backwards_example();
   test_and_backwards_random();
+  test_lshift_backwards_example();
+  test_lshift_backwards_random();
   return 0;
 }

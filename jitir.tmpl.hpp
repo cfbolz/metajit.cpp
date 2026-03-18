@@ -2676,6 +2676,16 @@ namespace metajit {
         return res;
       }
 
+      std::optional<Bits> shl_backwards(size_t shift) const {
+        uint64_t valid_mask = (1 << shift) - 1;
+        std::optional<Bits> res;
+        if (value & valid_mask) {
+          return res;
+        }
+        res = Bits(type, mask >> shift, value >> shift);
+        return res;
+      }
+
       void write(std::ostream& stream) const {
         size_t bits = type == Type::Bool ? 1 : type_size(type) * 8;
         for (size_t it = bits; it-- > 0; ) {
