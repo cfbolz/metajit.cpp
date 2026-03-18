@@ -88,7 +88,7 @@ b0(%0: Ptr):
   Branch %1, true_block=b1, false_block=b2
 b1:
   %4 = Select 1, %2, 0
-  Store %0, %4, aliasing=0, offset=16
+  Store %0, %2, aliasing=0, offset=16
 b2:
   Exit
 }

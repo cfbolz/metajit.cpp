@@ -3245,6 +3245,15 @@ private:
   NameMap<Bits> _values;
   NameMap<Value*> _substs;
 
+  void _add_subst(Inst* inst, Value* value) {
+    std::cout << "adding to substs: ";
+    inst->write(std::cout);
+    std::cout << " val ";
+    value->write_arg(std::cout);
+    std::cout << std::endl;
+    _substs[inst] = value;
+  }
+
 public:
 
   SimplifyTrace(metajit::Section* section, metajit::Chain* chain):
@@ -3269,12 +3278,24 @@ public:
         Bits bits = Bits::eval(inst, _values);
         _values[inst] = bits;
         if (bits.is_const()) {
-          std::cout << "adding to substs: ";
-          inst->write(std::cout);
-          std::cout << " const ";
-          bits.write(std::cout);
-          std::cout << std::endl;
-          _substs[inst] = _builder.build_const(inst->type(), bits.value);
+          _add_subst(inst, _builder.build_const(inst->type(), bits.value));
+        } else if (dynmatch(SelectInst, select, inst)) {
+          KnownBits::Bits cond = Bits::at(_values, select->cond());
+          if (cond.is_const()) {
+            if (cond.value != 0) {
+              _add_subst(inst, select->arg(1));
+            } else {
+              _add_subst(inst, select->arg(2));
+            }
+          }
+        } else if (dynmatch(AndInst, and_inst, inst)) {
+          Bits a = Bits::at(_values, and_inst->arg(0));
+          Bits b = Bits::at(_values, and_inst->arg(1));
+
+          // If there is no case where b_i is 0 and a_i is 1 or _, then a & b == a
+          if (b.is_const() && ((b.value ^ type_mask(b.type)) & (~a.mask | a.value)) == 0) {
+            _add_subst(inst, and_inst->arg(0));
+          }
         }
       }
       Inst* last_inst = block->terminator();
