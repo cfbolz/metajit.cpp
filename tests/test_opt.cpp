@@ -189,5 +189,39 @@ b2:
 )", builder.section(), chain);
     delete chain;
   });
+
+  DiffTest("backwards_and", output_path).run([](Builder& builder, TestData& data) {
+    Value* input = data.input(Type::Int8);
+    Value* value = builder.build_and(input, builder.build_const(Type::Int8, 0b111));
+    Value* cond = builder.build_eq(value, builder.build_const(Type::Int8, 0b111));
+    Block* true_block = builder.build_block();
+    Block* false_block = builder.build_block();
+    Chain* chain = new Chain();
+    chain->add(builder.block());
+    chain->add(true_block);
+    builder.build_branch(cond, true_block, false_block);
+
+    builder.move_to_begin(false_block);
+    builder.build_exit();
+
+    builder.move_to_begin(true_block);
+    Value* andinst = builder.build_and(input, builder.build_const(Type::Int8, 0b110));
+    data.output(andinst);
+    check_trace_simplify(R"(section {
+b0(%0: Ptr):
+  %1 = Load %0, type=Int8, flags={}, aliasing=0, offset=0
+  %2 = And %1, 7
+  %3 = Eq %2, 7
+  Branch %3, true_block=b1, false_block=b2
+b1:
+  %5 = And %1, 6
+  Store %0, 6, aliasing=0, offset=1
+b2:
+  Exit
+}
+)", builder.section(), chain);
+    delete chain;
+  });
+
   return 0;
 }

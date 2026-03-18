@@ -3336,6 +3336,15 @@ public:
           return propagate_backwards(eq->arg(0), Bits::constant(const_b->type(), const_b->value()));
         }
       }
+    } else if (dynmatch(AndInst, andinst, value)) {
+      auto arg0 = bits.and_backwards(Bits::at(_values, andinst->arg(1)));
+      if (arg0.has_value()) {
+        propagate_backwards(andinst->arg(0), arg0.value());
+      }
+      auto arg1 = bits.and_backwards(Bits::at(_values, andinst->arg(0)));
+      if (arg1.has_value()) {
+        propagate_backwards(andinst->arg(1), arg1.value());
+      }
     } else if (dynmatch(ResizeXInst, resize, value)) {
       Value* arg = resize->arg(0);
       return propagate_backwards(arg, bits.resize_x(arg->type()));
