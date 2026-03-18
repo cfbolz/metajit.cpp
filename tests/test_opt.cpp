@@ -348,5 +348,36 @@ b2:
     delete chain;
   });
 
+  DiffTest("backwards_xor", output_path).run([](Builder& builder, TestData& data) {
+    Value* cond = data.input(Type::Bool);
+    Value* not_cond = builder.build_xor(cond, builder.build_const(Type::Bool, 1));
+    Value* value = data.input(Type::Int64);
+    Block* true_block = builder.build_block();
+    Block* false_block = builder.build_block();
+    Chain* chain = new Chain();
+    chain->add(builder.block());
+    chain->add(true_block);
+    builder.build_branch(not_cond, true_block, false_block);
+
+    builder.move_to_begin(false_block);
+    builder.build_exit();
+
+    builder.move_to_begin(true_block);
+    data.output(cond);
+    check_trace_simplify(R"(section {
+b0(%0: Ptr):
+  %1 = Load %0, type=Bool, flags={}, aliasing=0, offset=0
+  %2 = Xor %1, 1
+  %3 = Load %0, type=Int64, flags={}, aliasing=0, offset=8
+  Branch %2, true_block=b1, false_block=b2
+b1:
+  Store %0, 0, aliasing=0, offset=16
+b2:
+  Exit
+}
+)", builder.section(), chain);
+    delete chain;
+  });
+
   return 0;
 }

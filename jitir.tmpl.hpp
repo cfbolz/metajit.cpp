@@ -3360,6 +3360,12 @@ public:
       propagate_backwards(add->arg(0), arg0);
       Bits arg1 = bits - Bits::at(_values, add->arg(0));
       propagate_backwards(add->arg(1), arg1);
+    } else if (dynmatch(XorInst, add, value)) {
+      // xor is its own inverse
+      Bits arg0 = bits ^ Bits::at(_values, add->arg(1));
+      propagate_backwards(add->arg(0), arg0);
+      Bits arg1 = bits ^ Bits::at(_values, add->arg(0));
+      propagate_backwards(add->arg(1), arg1);
     } else if (dynmatch(ShlInst, shl, value)) {
       Bits arg1 = Bits::at(_values, shl->arg(1));
       if (arg1.is_const()) {
