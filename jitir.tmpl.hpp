@@ -2663,27 +2663,23 @@ namespace metajit {
         // if this is the result an and-operation,
         // and other is one of the arguments,
         // what do we know about the other argument?
-        std::optional<Bits> res;
         // if we have a place where result is 1 but argument is 0, then we are
         // inconsistent
         if (value & argument.mask & ~argument.value) {
-          return res;
+          return {};
         }
         // in all the places where the result is 1 both arguments have to 1. in
         // the places where the result is 0, other has to be 0 iff argument is known 1.
         uint64_t other_mask = (argument.value & mask) | value;
-        res = Bits(type, other_mask, value);
-        return res;
+        return Bits(type, other_mask, value);
       }
 
       std::optional<Bits> shl_backwards(size_t shift) const {
         uint64_t valid_mask = (1 << shift) - 1;
-        std::optional<Bits> res;
         if (value & valid_mask) {
-          return res;
+          return {};
         }
-        res = Bits(type, mask >> shift, value >> shift);
-        return res;
+        return Bits(type, mask >> shift, value >> shift);
       }
 
       void write(std::ostream& stream) const {
@@ -2718,14 +2714,13 @@ namespace metajit {
       }
 
       std::optional<Bits> intersect(const Bits& other) {
-        std::optional<Bits> res;
         uint64_t resvalue = value | other.value;
         uint64_t either_known = mask | other.mask;
         uint64_t both_known = mask & other.mask;
         if ((value & both_known) == (other.value & both_known)) {
-          res = Bits(type, either_known, resvalue);
+          return Bits(type, either_known, resvalue);
         }
-        return res;
+        return {};
       }
 
       static Bits eval(Inst* inst, NameMap<Bits>& values) {
