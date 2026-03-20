@@ -3302,8 +3302,19 @@ public:
           Bits b = Bits::at(_values, and_inst->arg(1));
 
           // If there is no case where b_i is 0 and a_i is 1 or _, then a & b == a
-          if (b.is_const() && ((b.value ^ type_mask(b.type)) & (~a.mask | a.value)) == 0) {
+          if (((b.value ^ type_mask(b.type)) & (~a.mask | a.value)) == 0) {
             _add_subst(inst, and_inst->arg(0));
+          }
+        } else if (dynmatch(OrInst, or_inst, inst)) {
+          KnownBits::Bits a = Bits::at(_values, or_inst->arg(0));
+          KnownBits::Bits b = Bits::at(_values, or_inst->arg(1));
+
+          // If there is no case where b_i is 0 and a_i is 1 or _, then a | b == b
+          if (((b.value ^ type_mask(b.type)) & (~a.mask | a.value)) == 0) {
+            _add_subst(inst, or_inst->arg(1));
+          }
+          if (((a.value ^ type_mask(a.type)) & (~b.mask | b.value)) == 0) {
+            _add_subst(inst, or_inst->arg(0));
           }
         } else if (dynmatch(EqInst, eqinst, inst)) {
           if (dynmatch(Const, const_b, eqinst->arg(1))) {
