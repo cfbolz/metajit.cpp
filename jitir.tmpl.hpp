@@ -3166,8 +3166,22 @@ namespace metajit {
             KnownBits::Bits b = known_bits.at(and_inst->arg(1));
 
             // If there is no case where b_i is 0 and a_i is 1 or _, then a & b == a
-            if (b.is_const() && ((b.value ^ type_mask(b.type)) & (~a.mask | a.value)) == 0) {
+            if (((b.value ^ type_mask(b.type)) & (~a.mask | a.value)) == 0) {
               return and_inst->arg(0);
+            }
+            if (((a.value ^ type_mask(a.type)) & (~b.mask | b.value)) == 0) {
+              return and_inst->arg(1);
+            }
+          } else if (dynmatch(OrInst, or_inst, inst)) {
+            KnownBits::Bits a = known_bits.at(or_inst->arg(0));
+            KnownBits::Bits b = known_bits.at(or_inst->arg(1));
+
+            // If there is no case where b_i is 0 and a_i is 1 or _, then a | b == b
+            if (((b.value ^ type_mask(b.type)) & (~a.mask | a.value)) == 0) {
+              return or_inst->arg(1);
+            }
+            if (((a.value ^ type_mask(a.type)) & (~b.mask | b.value)) == 0) {
+              return or_inst->arg(0);
             }
           } else if (dynmatch(ResizeUInst, resize_u, inst)) {
             if (dynamic_cast<ResizeXInst*>(resize_u->arg(0)) ||

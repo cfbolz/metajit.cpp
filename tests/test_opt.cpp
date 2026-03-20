@@ -26,6 +26,9 @@ void check_simplify(const std::string& expected, Section* section) {
   metajit::Simplify::run(section, 1);
   std::stringstream ss;
   section->write(ss);
+  if (ss.str() != expected) {
+    std::cerr << "Expected:\n" << expected << "\n\nGot:\n" << ss.str() << std::endl;
+  }
   unittest_assert(ss.str() == expected);
 }
 
@@ -408,6 +411,20 @@ b2:
 }
 )", builder.section(), chain);
     delete chain;
+  });
+
+  DiffTest("or_idempotent", output_path).run([](Builder& builder, TestData& data) {
+    Value* value = data.input(Type::Int16);
+    Value* value2 = builder.build_or(value, builder.build_const(Type::Int16, 0b11));
+    Value* value3 = builder.build_or(value2, builder.build_const(Type::Int16, 0b11));
+    data.output(value3);
+    check_simplify(R"(section {
+b0(%0: Ptr):
+  %1 = Load %0, type=Int16, flags={}, aliasing=0, offset=0
+  %2 = Or %1, 3
+  Store %0, %2, aliasing=0, offset=2
+}
+)", builder.section());
   });
 
   return 0;
