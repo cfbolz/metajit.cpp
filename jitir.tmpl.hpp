@@ -3291,23 +3291,32 @@ public:
           if (b.is_const() && ((b.value ^ type_mask(b.type)) & (~a.mask | a.value)) == 0) {
             _add_subst(inst, and_inst->arg(0));
           }
+        } else if (dynmatch(EqInst, eqinst, inst)) {
+          if (dynmatch(Const, const_b, eqinst->arg(1))) {
+            if (const_b->value() == 1) {
+              if (dynmatch(ResizeUInst, resizeu, eqinst->arg(0))) {
+                if (resizeu->arg(0)->type() == Type::Bool) {
+                  _add_subst(inst, resizeu->arg(0));
+                }
+              }
+            }
+          }
         }
       }
       Inst* last_inst = block->terminator();
       if (dynmatch(BranchInst, branch, last_inst)) {
         // in the next block we know the value of the bool
-        if (dynmatch(NamedValue, cond, branch->cond())) {
-          Block* true_block = branch->true_block();
-          Block* false_block = branch->false_block();
-          if (is_exit_block(true_block)) {
-            block = false_block;
-            propagate_backwards(cond, Bits::constant(false));
-            continue;
-          } else if (is_exit_block(false_block)) {
-            block = true_block;
-            propagate_backwards(cond, Bits::constant(true));
-            continue;
-          }
+        Block* true_block = branch->true_block();
+        Block* false_block = branch->false_block();
+        Value* cond = branch->cond();
+        if (is_exit_block(true_block)) {
+          block = false_block;
+          propagate_backwards(cond, Bits::constant(false));
+          continue;
+        } else if (is_exit_block(false_block)) {
+          block = true_block;
+          propagate_backwards(cond, Bits::constant(true));
+          continue;
         }
       }
       return;
