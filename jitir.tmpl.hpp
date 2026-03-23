@@ -1428,6 +1428,18 @@ namespace metajit {
         } else if (constant->value() == type_mask(a->type())) {
           return constant;
         }
+      } else if (dynmatch(AndInst, and_a, a)) {
+        // (x & c1) | (x & c2) => x & (c1 | c2)
+        if (dynmatch(AndInst, and_b, b)) {
+          if (dynmatch(Const, const_a, and_a->arg(1))) {
+            if (dynmatch(Const, const_b, and_b->arg(1))) {
+              if (and_a->arg(0) == and_b->arg(0)) {
+                return fold_and(and_a->arg(0), build_const(a->type(), const_a->value() | const_b->value()));
+              }
+            }
+          }
+        }
+
       }
       return build_or(a, b);
     }
@@ -1628,10 +1640,12 @@ namespace metajit {
       } else if (dynmatch(Const, constant, a)) {
         uint64_t value = constant->value() & type_mask(type);
         return build_const(type, value);
+      } else if (dynmatch(ResizeXInst, resize_a, a)) {
+        if (resize_a->arg(0)->type() == type) {
+          return fold_and(resize_a->arg(0), build_const(type, type_mask(resize_a->type())));
+        }
       }
-
       unop_const_prop(type, const_a->value());
-
       return build_resize_u(a, type);
     }
 
@@ -1664,7 +1678,25 @@ namespace metajit {
         } else if (const_b->value() == 0) {
           return a;
         }
+        // ((x >> c) & m) << c => x & (m << c)
+        if (dynmatch(AndInst, andinst, a)) {
+          Value* and_arg_a = andinst->arg(0);
+          Value* and_arg_b = andinst->arg(1);
+          if (dynmatch(Const, and_arg_b_const, and_arg_b)) {
+            if (dynmatch(ShrUInst, shr_u, and_arg_a)) {
+              Value* shr_u_arg_a = shr_u->arg(0);
+              Value* shr_u_arg_b = shr_u->arg(1);
+              if (dynmatch(Const, shr_u_arg_b_const, shr_u_arg_b)) {
+                if (shr_u_arg_b_const->value() == const_b->value()) {
+                  uint64_t mask = and_arg_b_const->value() << const_b->value();
+                  return fold_and(shr_u_arg_a, build_const(a->type(), type_mask(a->type()) & mask));
+                }
+              }
+            }
+          }
+        }
       }
+
 
       return build_shl(a, b);
     }
@@ -2723,6 +2755,16 @@ namespace metajit {
         return {};
       }
 
+      bool and_idempotent_condition(const Bits& b) const {
+        // If there is no case where b_i is 0 and a_i is 1 or _, then a & b == a
+        return ((b.value ^ type_mask(b.type)) & (~mask | value)) == 0;
+      }
+
+      bool or_idempotent_condition(const Bits& b) const {
+        // the condition for or is the same, just with arguments swapped
+        return b.and_idempotent_condition(*this);
+      }
+
       static Bits eval(Inst* inst, NameMap<Bits>& values) {
         if (dynamic_cast<FreezeInst*>(inst) ||
             dynamic_cast<AssumeConstInst*>(inst)) {
@@ -3165,23 +3207,21 @@ namespace metajit {
             KnownBits::Bits a = known_bits.at(and_inst->arg(0));
             KnownBits::Bits b = known_bits.at(and_inst->arg(1));
 
-            // If there is no case where b_i is 0 and a_i is 1 or _, then a & b == a
-            if (((b.value ^ type_mask(b.type)) & (~a.mask | a.value)) == 0) {
+            if (a.and_idempotent_condition(b)) {
               return and_inst->arg(0);
             }
-            if (((a.value ^ type_mask(a.type)) & (~b.mask | b.value)) == 0) {
+            if (b.and_idempotent_condition(a)) {
               return and_inst->arg(1);
             }
           } else if (dynmatch(OrInst, or_inst, inst)) {
             KnownBits::Bits a = known_bits.at(or_inst->arg(0));
             KnownBits::Bits b = known_bits.at(or_inst->arg(1));
 
-            // If there is no case where b_i is 0 and a_i is 1 or _, then a | b == b
-            if (((b.value ^ type_mask(b.type)) & (~a.mask | a.value)) == 0) {
-              return or_inst->arg(1);
-            }
-            if (((a.value ^ type_mask(a.type)) & (~b.mask | b.value)) == 0) {
+            if (a.or_idempotent_condition(b)) {
               return or_inst->arg(0);
+            }
+            if (b.or_idempotent_condition(a)) {
+              return or_inst->arg(1);
             }
           } else if (dynmatch(ResizeUInst, resize_u, inst)) {
             if (dynamic_cast<ResizeXInst*>(resize_u->arg(0)) ||

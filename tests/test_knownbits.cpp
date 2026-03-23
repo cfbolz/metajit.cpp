@@ -158,7 +158,6 @@ void test_sub_example() {
   });
 }
 
-
 void test_intersect_example() {
   unittest::Test("intersect_example").run([]() {
     Bits a = Bits(Type::Int64, 0b10001111, 0b10001010); // 1???1010
@@ -192,6 +191,27 @@ void test_random_intersect() {
       } else {
         unittest_assert (!bits_a.matches_const(value_b));
         unittest_assert (!bits_b.matches_const(value_a));
+      }
+    }
+  });
+}
+
+void test_idempotent_conditions() {
+  unittest::Test("idempotent_conditions").run([]() {
+    for (int i = 0; i < num_examples; i++) {
+      auto [value_a, bits_a] = random_value_and_bits(Type::Int8);
+      auto [value_b, bits_b] = random_value_and_bits(Type::Int8);
+      if (bits_a.and_idempotent_condition(bits_b)) {
+        unittest_assert ((value_a & value_b) == value_a);
+      }
+      if (bits_b.and_idempotent_condition(bits_a)) {
+        unittest_assert ((value_a & value_b) == value_b);
+      }
+      if (bits_a.or_idempotent_condition(bits_b)) {
+        unittest_assert ((value_a | value_b) == value_a);
+      }
+      if (bits_b.or_idempotent_condition(bits_a)) {
+        unittest_assert ((value_a | value_b) == value_b);
       }
     }
   });
@@ -271,5 +291,6 @@ int main() {
   test_and_backwards_random();
   test_lshift_backwards_example();
   test_lshift_backwards_random();
+  test_idempotent_conditions();
   return 0;
 }
