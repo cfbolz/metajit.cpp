@@ -25,6 +25,8 @@
 #include <map>
 #include <optional>
 #include <cstring>
+#include <iostream>
+#include <bitset>
 
 #include "../lwir.cpp/lwir_utils.hpp"
 
@@ -3072,6 +3074,13 @@ namespace metajit {
               use(and_inst->arg(0), _values[inst]);
             }
             use(and_inst->arg(1), _values[inst]);
+          } else if (dynmatch(OrInst, or_inst, inst)) {
+            if (dynmatch(Const, const_b, or_inst->arg(1))) {
+              use(or_inst->arg(0), _values[inst].used & ~const_b->value());
+            } else {
+              use(or_inst->arg(0), _values[inst]);
+            }
+            use(or_inst->arg(1), _values[inst]);
           } else if (dynamic_cast<OrInst*>(inst) ||
                      dynamic_cast<XorInst*>(inst)) {
             // Element-wise instructions
